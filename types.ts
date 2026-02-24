@@ -6,8 +6,9 @@ export interface User {
   secondName: string;
   lastName: string;
   fullName: string;
-  taxId: string; // RUC/Cédula
+  taxId: string; // Cédula/RUC/Pasaporte
   address?: string;
+  postalCode?: string;
   phone?: string;
   companyName?: string;
   privacyAccepted: boolean;
@@ -28,6 +29,10 @@ export interface Invoice {
   folio: string; // Factura N.
   systemNumber: string; // Número de Sistema (LADF)
   accessKey: string; // Clave de Acceso (49 dígitos)
+  authorizationNumber?: string;
+  authorizationDate?: string;
+  environment?: string;
+  emissionType?: string;
   date: string;
   time: string;
   vendor: string;

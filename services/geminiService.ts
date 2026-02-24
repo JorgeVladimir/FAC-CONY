@@ -7,7 +7,7 @@ const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 export const analyzeInvoiceWithAI = async (invoice: Invoice) => {
   const ai = getAI();
   const prompt = `
-    Eres un asistente experto en contabilidad y finanzas para Comercializadora Oni S.A.
+    Eres un asistente experto en contabilidad y finanzas para GRUPO LINA.
     Analiza la siguiente factura y proporciona un resumen ejecutivo en español.
     Incluye: 
     1. Resumen de los artículos adquiridos.
@@ -33,7 +33,7 @@ export const analyzeInvoiceWithAI = async (invoice: Invoice) => {
 export const chatWithAI = async (history: {role: string, content: string}[], message: string, invoices: Invoice[]) => {
   const ai = getAI();
   const systemInstruction = `
-    Eres el asistente inteligente de Comercializadora Oni S.A. 
+    Eres el asistente inteligente de GRUPO LINA. 
     Ayudas a los usuarios a entender sus facturas electrónicas, estados de cuenta y gastos comerciales.
     Facturas actuales del usuario para contexto: ${JSON.stringify(invoices)}
     Responde siempre de forma profesional, clara y amable en español.

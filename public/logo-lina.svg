@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420" role="img" aria-labelledby="title desc">
+  <title id="title">Importadora Lina</title>
+  <desc id="desc">Logotipo en tono naranja similar a la marca Importadora Lina.</desc>
+  <rect width="900" height="420" fill="none"/>
+  <g fill="#f97316">
+    <rect x="515" y="74" rx="26" ry="26" width="300" height="62"/>
+    <text x="665" y="115" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="700" letter-spacing="1.5" fill="#ffffff">IMPORTADORA</text>
+    <text x="80" y="312" font-family="Brush Script MT, Segoe Script, Pacifico, cursive" font-size="265" font-weight="700" letter-spacing="2">Lina</text>
+  </g>
+</svg>

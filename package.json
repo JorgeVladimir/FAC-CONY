@@ -1,22 +1,40 @@
 {
-  "name": "portal-de-facturación---comercializadora-oni-s.a.",
+  "name": "Grupo Lina - Portal de Facturación",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "dev:prep": "kill-port 3000 3002",
     "dev": "vite",
+    "dev:api": "cross-env API_PORT=3002 node --watch backend/dev-api.mjs",
+    "dev:full": "concurrently -k -n FRONT,API -c cyan,magenta \"npm:dev\" \"npm:dev:api\"",
+    "share:dev": "lt --port 3001",
+    "share:dev:fixed": "lt --port 3001 --subdomain faccony-live-2026",
+    "predev:phone": "npm run dev:prep",
+    "dev:phone": "concurrently -k -n FRONT,API -c cyan,magenta \"npm:dev\" \"npm:dev:api\"",
+    "start": "cross-env SERVE_STATIC=true node backend/server.js",
+    "start:api": "cross-env SERVE_STATIC=false node backend/server.js",
+    "share": "lt --port 3000",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^19.2.4",
     "@google/genai": "^1.39.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mssql": "^11.0.1",
+    "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.1.2",
+    "cross-env": "^10.1.0",
+    "kill-port": "^2.0.1",
+    "localtunnel": "^2.0.2",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

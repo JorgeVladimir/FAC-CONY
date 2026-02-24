@@ -20,20 +20,20 @@ const InvoiceDetail: React.FC<Props> = ({ invoice, onBack }) => {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-5 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <button 
         onClick={onBack}
-        className="flex items-center gap-3 text-orange-600 font-black hover:text-orange-800 transition-colors uppercase text-[10px] tracking-[0.2em]"
+        className="flex items-center gap-3 text-red-600 font-black hover:text-red-800 transition-colors uppercase text-[10px] tracking-[0.2em]"
       >
         <i className="fas fa-arrow-left"></i> Volver al listado
       </button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-10">
         {/* Mock Physical Receipt View */}
         <div className="lg:col-span-7 flex justify-center">
-          <div className="w-full max-w-md bg-white border border-slate-200 shadow-xl p-8 font-mono text-[11px] text-slate-800 space-y-4">
+          <div className="w-full max-w-md bg-white border border-slate-200 shadow-xl p-5 sm:p-8 font-mono text-[10px] sm:text-[11px] text-slate-800 space-y-4">
             <div className="text-center space-y-1">
-              <p className="font-bold text-sm uppercase">COMERCIALIZADORA ONI S.A.</p>
+              <p className="font-bold text-sm uppercase">GRUPO LINA</p>
               <p className="font-bold">RUC: 1793224843001</p>
               <p className="uppercase">Detalle de Consumo</p>
             </div>
@@ -51,10 +51,13 @@ const InvoiceDetail: React.FC<Props> = ({ invoice, onBack }) => {
 
             <div className="space-y-1 pt-2">
               <p><span className="font-bold uppercase">Cliente:</span> {invoice.clientName}</p>
-              <p><span className="font-bold uppercase">Cedula o RUC:</span> {invoice.clientTaxId}</p>
+              <p><span className="font-bold uppercase">Cédula/RUC/Pasaporte:</span> {invoice.clientTaxId}</p>
               <p><span className="font-bold uppercase">Fecha:</span> {invoice.date} <span className="ml-4 font-bold uppercase">Hora:</span> {invoice.time}</p>
               <p><span className="font-bold uppercase">Factura N.:</span> {invoice.folio}</p>
-              <p><span className="font-bold uppercase text-orange-600">Numero de Sistema:</span> {invoice.systemNumber}</p>
+              <p><span className="font-bold uppercase">No. Autorización SRI:</span> {invoice.authorizationNumber || 'N/D'}</p>
+              <p><span className="font-bold uppercase">Fecha Autorización:</span> {invoice.authorizationDate || 'N/D'}</p>
+              <p><span className="font-bold uppercase">Ambiente:</span> {invoice.environment || 'N/D'} <span className="ml-4 font-bold uppercase">Tipo Emisión:</span> {invoice.emissionType || 'N/D'}</p>
+              <p><span className="font-bold uppercase text-red-600">Numero de Sistema:</span> {invoice.systemNumber}</p>
               <p><span className="font-bold uppercase">Vendedor:</span> {invoice.vendor}</p>
             </div>
 
@@ -94,14 +97,14 @@ const InvoiceDetail: React.FC<Props> = ({ invoice, onBack }) => {
 
         {/* Action Panel and AI Analysis */}
         <div className="lg:col-span-5 space-y-8">
-          <div className="bg-slate-900 rounded-3xl p-8 text-white shadow-2xl">
+          <div className="bg-slate-900 rounded-3xl p-5 sm:p-8 text-white shadow-2xl">
             <div className="flex items-center gap-4 mb-8">
-              <div className="w-12 h-12 bg-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-900/40">
+              <div className="w-12 h-12 bg-red-600 rounded-2xl flex items-center justify-center shadow-lg shadow-red-900/40">
                 <i className="fas fa-microchip text-xl"></i>
               </div>
               <div>
                 <h3 className="font-black text-xl tracking-tighter">ONI Intellect</h3>
-                <p className="text-[9px] text-orange-400 font-black uppercase tracking-[0.2em]">IA Estratégica</p>
+                <p className="text-[9px] text-red-400 font-black uppercase tracking-[0.2em]">IA Estratégica</p>
               </div>
             </div>
             
@@ -112,7 +115,7 @@ const InvoiceDetail: React.FC<Props> = ({ invoice, onBack }) => {
                 </p>
                 <button 
                   onClick={handleAIAnalysis}
-                  className="w-full bg-orange-600 text-white py-4 rounded-2xl font-black text-xs hover:bg-orange-700 transition-all uppercase tracking-widest shadow-xl shadow-orange-900/30"
+                  className="w-full bg-red-600 text-white py-4 rounded-2xl font-black text-xs hover:bg-red-700 transition-all uppercase tracking-widest shadow-xl shadow-red-900/30"
                 >
                   Consultar a la IA
                 </button>
@@ -121,7 +124,7 @@ const InvoiceDetail: React.FC<Props> = ({ invoice, onBack }) => {
 
             {isAnalyzing && (
               <div className="flex flex-col items-center py-10 gap-6">
-                <div className="w-10 h-10 border-4 border-orange-600/30 border-t-orange-600 rounded-full animate-spin"></div>
+                <div className="w-10 h-10 border-4 border-red-600/30 border-t-red-600 rounded-full animate-spin"></div>
                 <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest animate-pulse">Analizando compra...</p>
               </div>
             )}
@@ -133,7 +136,7 @@ const InvoiceDetail: React.FC<Props> = ({ invoice, onBack }) => {
                 </div>
                 <button 
                   onClick={() => setAnalysis(null)}
-                  className="mt-6 text-[9px] font-black uppercase tracking-widest text-orange-500 hover:text-orange-400 underline"
+                  className="mt-6 text-[9px] font-black uppercase tracking-widest text-red-500 hover:text-red-400 underline"
                 >
                   Nuevo Análisis
                 </button>
@@ -141,15 +144,25 @@ const InvoiceDetail: React.FC<Props> = ({ invoice, onBack }) => {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <button className="bg-white border-2 border-slate-200 p-6 rounded-3xl flex flex-col items-center gap-3 hover:border-orange-500 transition-all group">
-              <i className="fas fa-file-pdf text-2xl text-slate-400 group-hover:text-orange-600"></i>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <a
+              href={invoice.pdfUrl || '#'}
+              target="_blank"
+              rel="noreferrer"
+              className={`bg-white border-2 p-4 sm:p-6 rounded-3xl flex flex-col items-center gap-2 sm:gap-3 transition-all group ${invoice.pdfUrl ? 'border-slate-200 hover:border-red-500' : 'border-slate-100 opacity-50 pointer-events-none'}`}
+            >
+              <i className="fas fa-file-pdf text-2xl text-slate-400 group-hover:text-red-600"></i>
               <span className="text-[10px] font-black uppercase tracking-widest">RIDE Oficial</span>
-            </button>
-            <button className="bg-white border-2 border-slate-200 p-6 rounded-3xl flex flex-col items-center gap-3 hover:border-orange-500 transition-all group">
-              <i className="fas fa-code text-2xl text-slate-400 group-hover:text-orange-600"></i>
+            </a>
+            <a
+              href={invoice.xmlUrl || '#'}
+              target="_blank"
+              rel="noreferrer"
+              className={`bg-white border-2 p-4 sm:p-6 rounded-3xl flex flex-col items-center gap-2 sm:gap-3 transition-all group ${invoice.xmlUrl ? 'border-slate-200 hover:border-red-500' : 'border-slate-100 opacity-50 pointer-events-none'}`}
+            >
+              <i className="fas fa-code text-2xl text-slate-400 group-hover:text-red-600"></i>
               <span className="text-[10px] font-black uppercase tracking-widest">Descargar XML</span>
-            </button>
+            </a>
           </div>
         </div>
       </div>
