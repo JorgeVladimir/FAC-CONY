@@ -130,6 +130,24 @@ sudo systemctl reload nginx
 - Frontend: `https://facturas.tudominio.com`
 - Verificar login real y consulta de facturas.
 
+### 9) Actualización en producción sin cortes (zero-downtime)
+
+Usa este flujo para actualizar sin tumbar el servicio:
+
+```bash
+cd /var/www/fac-cony
+git pull
+npm ci
+npm run build
+pm2 reload fac-cony-api --update-env
+```
+
+Notas importantes:
+
+- `pm2 reload` (no `restart`) mantiene la API respondiendo mientras reemplaza procesos.
+- El frontend en `dist/` lo sirve Nginx y se actualiza al terminar el build.
+- Con `deploy/pm2/ecosystem.config.cjs` en modo `cluster` e `instances: 2`, la recarga es continua.
+
 ### Archivos de despliegue incluidos
 
 - `.env.production.example`

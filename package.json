@@ -14,9 +14,12 @@
     "dev:phone": "concurrently -k -n FRONT,API -c cyan,magenta \"npm:dev\" \"npm:dev:api\"",
     "start": "cross-env SERVE_STATIC=true node backend/server.js",
     "start:api": "cross-env SERVE_STATIC=false node backend/server.js",
+    "prod:reload": "pm2 reload fac-cony-api --update-env",
+    "prod:deploy": "npm run build && npm run prod:reload",
     "share": "lt --port 3000",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:prod": "kill-port 4173 && npm run build && vite preview --host 0.0.0.0 --port 4173"
   },
   "dependencies": {
     "@google/genai": "^1.39.0",

@@ -11,6 +11,7 @@ export interface User {
   postalCode?: string;
   phone?: string;
   companyName?: string;
+  fidelizado?: boolean;
   privacyAccepted: boolean;
   privacyTimestamp: string;
 }

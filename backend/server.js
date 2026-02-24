@@ -83,6 +83,7 @@ const passwordPattern = /^\d{7}$/;
 const maxPasswordAttempts = 5;
 const failedPasswordAttemptsByTaxId = new Map();
 const passwordOverrideByTaxId = new Map();
+const privacyConsentByTaxId = new Map();
 const docsAuthorizedRoot = process.env.DOCS_AUTHORIZED_PATH || '\\\\192.168.1.164\\DocumentosElectronicos\\Autorizados';
 const docsAuthorizedFallbackRoot = '\\\\192.168.1.164\\DocumentosElectronicos\\Autorizados';
 const docsAuthorizedLegacyRoot = 'C:\\ICG\\APPS\\DocumentosElectronicos\\Autorizados';
@@ -114,6 +115,21 @@ const pickColumn = (columnSet, candidates) => {
     }
   }
   return null;
+};
+
+const parseBooleanDbValue = (value) => {
+  if (value === null || value === undefined) return false;
+
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+
+  const normalized = String(value).trim().toUpperCase();
+  return ['1', 'S', 'SI', 'TRUE', 'Y', 'YES'].includes(normalized);
+};
+
+const resolveFidelizadoColumn = (clientesColumns = []) => {
+  const clientesSet = toLowerSet(clientesColumns);
+  return pickColumn(clientesSet, ['FIDELIZADO', 'ESFIDELIZADO', 'CLIENTEFIDELIZADO', 'FIDELIZA']);
 };
 
 const quoteIdentifier = (identifier) => `[${String(identifier).replace(/]/g, ']]')}]`;
@@ -1096,10 +1112,18 @@ app.post('/api/auth/validate-password', async (req, res) => {
     const pool = await getPool();
     const clientesCtx = await resolveClientesIdentityContext(pool, true);
     const clientesTaxIdSql = buildClientesTaxIdSql('c', clientesCtx.clientesIdColumn, clientesCtx.clientesColumns);
+    const fidelizadoColumn = resolveFidelizadoColumn(clientesCtx.clientesColumns);
+    const fidelizadoSql = fidelizadoColumn ? `c.${quoteIdentifier(fidelizadoColumn)}` : 'NULL';
     const result = await pool
       .request()
       .input('taxIdNormalized', sql.VarChar(40), taxIdKey)
-      .query(`SELECT TOP (1) ${clientesTaxIdSql} AS IDENTIFICACION FROM ${clientesCtx.clientesTableRef} c WHERE ${buildNormalizedTaxIdSql(clientesTaxIdSql)} = @taxIdNormalized`);
+      .query(`
+        SELECT TOP (1)
+          ${clientesTaxIdSql} AS IDENTIFICACION,
+          ${fidelizadoSql} AS FIDELIZADO
+        FROM ${clientesCtx.clientesTableRef} c
+        WHERE ${buildNormalizedTaxIdSql(clientesTaxIdSql)} = @taxIdNormalized
+      `);
 
     if (result.recordset.length === 0) {
       return res.status(404).json({
@@ -1126,8 +1150,14 @@ app.post('/api/auth/validate-password', async (req, res) => {
     }
 
     failedPasswordAttemptsByTaxId.delete(taxIdKey);
+    const fidelizado = parseBooleanDbValue(result.recordset[0]?.FIDELIZADO) || privacyConsentByTaxId.get(taxIdKey) === true;
 
-    return res.json({ valid: true, remainingAttempts: maxPasswordAttempts, customPasswordActive: Boolean(customPassword) });
+    return res.json({
+      valid: true,
+      fidelizado,
+      remainingAttempts: maxPasswordAttempts,
+      customPasswordActive: Boolean(customPassword)
+    });
   } catch (error) {
     console.error('Error validate-password:', error);
     return res.status(500).json({
@@ -1135,6 +1165,68 @@ app.post('/api/auth/validate-password', async (req, res) => {
       remainingAttempts: maxPasswordAttempts - currentAttempts,
       message: 'Error validando contraseña.'
     });
+  }
+});
+
+app.post('/api/auth/privacy-consent', async (req, res) => {
+  const rawTaxId = req.body?.taxId ?? req.body?.cif;
+  const taxId = normalizeTaxIdValue(rawTaxId);
+  const accepted = req.body?.accepted === true;
+
+  if (!taxIdPattern.test(taxId)) {
+    return res.status(400).json({ ok: false, message: 'CÉDULA/RUC/PASAPORTE inválido.' });
+  }
+
+  if (!accepted) {
+    return res.status(400).json({ ok: false, message: 'Debe aceptar el tratamiento de datos personales.' });
+  }
+
+  try {
+    const pool = await getPool();
+    const clientesCtx = await resolveClientesIdentityContext(pool, true);
+    const clientesTaxIdSql = buildClientesTaxIdSql('c', clientesCtx.clientesIdColumn, clientesCtx.clientesColumns);
+    const clientesSet = toLowerSet(clientesCtx.clientesColumns || []);
+
+    const fidelizadoColumn = resolveFidelizadoColumn(clientesCtx.clientesColumns);
+    const privacyAcceptedColumn = pickColumn(clientesSet, ['ACEPTATRATAMIENTODATOS', 'PRIVACYACCEPTED', 'ACEPTADATOS']);
+    const privacyTimestampColumn = pickColumn(clientesSet, ['FECHAACEPTACIONDATOS', 'FECHAACEPTACION', 'PRIVACYACCEPTEDAT']);
+
+    const setClauses = [];
+    if (fidelizadoColumn) {
+      setClauses.push(`${quoteIdentifier(fidelizadoColumn)} = 1`);
+    }
+    if (privacyAcceptedColumn) {
+      setClauses.push(`${quoteIdentifier(privacyAcceptedColumn)} = 1`);
+    }
+    if (privacyTimestampColumn) {
+      setClauses.push(`${quoteIdentifier(privacyTimestampColumn)} = GETDATE()`);
+    }
+
+    if (setClauses.length === 0) {
+      privacyConsentByTaxId.set(taxId, true);
+      return res.json({ ok: true, fidelizado: true, persistedInDatabase: false });
+    }
+
+    const updateResult = await pool
+      .request()
+      .input('taxIdNormalized', sql.VarChar(40), taxId)
+      .query(`
+        UPDATE c
+        SET ${setClauses.join(',\n            ')}
+        FROM ${clientesCtx.clientesTableRef} c
+        WHERE ${buildNormalizedTaxIdSql(clientesTaxIdSql)} = @taxIdNormalized
+      `);
+
+    if ((updateResult.rowsAffected?.[0] || 0) === 0) {
+      return res.status(404).json({ ok: false, message: 'Cliente no encontrado para registrar consentimiento.' });
+    }
+
+    privacyConsentByTaxId.set(taxId, true);
+    return res.json({ ok: true, fidelizado: true, persistedInDatabase: true });
+  } catch (error) {
+    console.error('Error privacy-consent:', error);
+    privacyConsentByTaxId.set(taxId, true);
+    return res.json({ ok: true, fidelizado: true, persistedInDatabase: false });
   }
 });
 

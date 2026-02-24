@@ -23,6 +23,11 @@ const App: React.FC = () => {
   const [passwordAttempts, setPasswordAttempts] = useState(0);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [hasStoredPrivacyConsent, setHasStoredPrivacyConsent] = useState(false);
+  const [clientFidelizado, setClientFidelizado] = useState<boolean | null>(null);
+  const [showFidelizadoModal, setShowFidelizadoModal] = useState(false);
+  const [showDataTreatmentModal, setShowDataTreatmentModal] = useState(false);
+  const [showNewClientRegisteredModal, setShowNewClientRegisteredModal] = useState(false);
+  const [isSubmittingLoginFlow, setIsSubmittingLoginFlow] = useState(false);
   const [showGenericReset, setShowGenericReset] = useState(false);
   const [genericPasswordInput, setGenericPasswordInput] = useState('');
   const [isResettingGeneric, setIsResettingGeneric] = useState(false);
@@ -57,6 +62,30 @@ const App: React.FC = () => {
   };
 
   const getPrivacyConsentStorageKey = (taxId: string) => `privacy-consent:${taxId}`;
+
+  const buildAuthenticatedUser = (privacyAcceptedValue: boolean, fidelizadoValue: boolean): User => {
+    const existingConsent = getStoredPrivacyConsent(cedula);
+    const privacyTimestamp = existingConsent?.timestamp || new Date().toISOString();
+
+    if (privacyAcceptedValue && !existingConsent?.accepted) {
+      savePrivacyConsent(cedula, privacyTimestamp);
+      setHasStoredPrivacyConsent(true);
+    }
+
+    return {
+      id: `usr-${Date.now()}`,
+      email: `${cedula}@cony.local`,
+      firstName: 'CLIENTE',
+      secondName: '',
+      lastName: cedula,
+      fullName: `CLIENTE ${cedula}`,
+      taxId: cedula,
+      companyName: 'GRUPO LINA',
+      fidelizado: fidelizadoValue,
+      privacyAccepted: privacyAcceptedValue,
+      privacyTimestamp
+    };
+  };
 
   const getStoredPrivacyConsent = (taxId: string): { accepted: boolean; timestamp: string } | null => {
     try {
@@ -280,17 +309,16 @@ const App: React.FC = () => {
     }
   };
 
-  const handleValidatePassword = async (): Promise<boolean> => {
+  const handleValidatePassword = async (): Promise<{ ok: boolean; fidelizado: boolean | null }> => {
     setError(null);
 
     if (passwordAttempts >= maxPasswordAttempts) {
       setError('Ha excedido el máximo de 5 intentos de contraseña.');
-      return false;
+      return { ok: false, fidelizado: null };
     }
 
     if (!/^\d{7}$/.test(password)) {
-      setError('La contraseña genérica debe tener exactamente 7 dígitos.');
-      return false;
+      return { ok: false, fidelizado: null };
     }
 
     try {
@@ -310,54 +338,91 @@ const App: React.FC = () => {
           setPasswordAttempts((prev) => Math.min(maxPasswordAttempts, prev + 1));
         }
         setError(data.message || 'Contraseña incorrecta.');
-        return false;
+        return { ok: false, fidelizado: null };
       }
 
+      const isFidelizado = data.fidelizado === true;
       setIsPasswordValidated(true);
+      setClientFidelizado(isFidelizado);
       setPasswordAttempts(0);
       if (hasStoredPrivacyConsent) {
         setPrivacyAccepted(true);
       }
-      return true;
+      return { ok: true, fidelizado: isFidelizado };
     } catch {
       setError('No se pudo validar la contraseña. Verifica conexión con el backend.');
-      return false;
+      return { ok: false, fidelizado: null };
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleLogin = () => {
+  const completeLogin = (isFidelizadoValue: boolean, privacyAcceptedValue: boolean) => {
+    const authenticatedUser = buildAuthenticatedUser(privacyAcceptedValue, isFidelizadoValue);
+    setUser(authenticatedUser);
+    setActiveTab('dashboard');
+    localStorage.setItem('user', JSON.stringify(authenticatedUser));
+    setIsSubmittingLoginFlow(false);
+  };
+
+  const handleAcceptDataTreatment = async () => {
     setError(null);
 
-    if (!privacyAccepted) {
-      setError('Debe autorizar el tratamiento de datos personales.');
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/auth/privacy-consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taxId: cedula,
+          cif: cedula,
+          accepted: true
+        })
+      });
+
+      let data: any = {};
+      try {
+        data = await response.json();
+      } catch {
+        data = {};
+      }
+
+      if (!response.ok || data.ok === false) {
+        console.warn('No se pudo confirmar persistencia de consentimiento en backend. Se continúa con el acceso.', data);
+      }
+
+      setShowDataTreatmentModal(false);
+      setClientFidelizado(true);
+      completeLogin(true, true);
+      setShowNewClientRegisteredModal(true);
+    } catch {
+      setShowDataTreatmentModal(false);
+      setClientFidelizado(true);
+      completeLogin(true, true);
+      setShowNewClientRegisteredModal(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const executePostValidationFlow = (fidelizadoValue: boolean) => {
+    if (isSubmittingLoginFlow) {
       return;
     }
 
-    const existingConsent = getStoredPrivacyConsent(cedula);
-    const privacyTimestamp = existingConsent?.timestamp || new Date().toISOString();
+    setIsSubmittingLoginFlow(true);
 
-    if (!existingConsent?.accepted) {
-      savePrivacyConsent(cedula, privacyTimestamp);
-      setHasStoredPrivacyConsent(true);
+    if (fidelizadoValue) {
+      setShowFidelizadoModal(true);
+
+      window.setTimeout(() => {
+        setShowFidelizadoModal(false);
+        completeLogin(true, true);
+      }, 2500);
+      return;
     }
 
-    const authenticatedUser: User = {
-      id: `usr-${Date.now()}`,
-      email: `${cedula}@cony.local`,
-      firstName: 'CLIENTE',
-      secondName: '',
-      lastName: cedula,
-      fullName: `CLIENTE ${cedula}`,
-      taxId: cedula,
-      companyName: 'GRUPO LINA',
-      privacyAccepted: Boolean(existingConsent?.accepted || privacyAccepted),
-      privacyTimestamp
-    };
-
-    setUser(authenticatedUser);
-    localStorage.setItem('user', JSON.stringify(authenticatedUser));
+    setShowDataTreatmentModal(true);
   };
 
   const handleResetToGenericPassword = async () => {
@@ -453,17 +518,33 @@ const App: React.FC = () => {
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!isCedulaValidated) {
-      await handleValidateCedula();
+    if (isSubmittingLoginFlow || isLoading) {
       return;
+    }
+
+    if (!isCedulaValidated) {
+      const isCedulaOk = await handleValidateCedula();
+      if (!isCedulaOk) {
+        return;
+      }
     }
 
     if (!isPasswordValidated) {
-      await handleValidatePassword();
+      const passwordValidationResult = await handleValidatePassword();
+      if (!passwordValidationResult.ok || passwordValidationResult.fidelizado === null) {
+        return;
+      }
+
+      executePostValidationFlow(passwordValidationResult.fidelizado);
       return;
     }
 
-    handleLogin();
+    if (clientFidelizado === null) {
+      setError('No se pudo determinar el estado de fidelización del cliente.');
+      return;
+    }
+
+    executePostValidationFlow(clientFidelizado);
   };
 
   // FIX: Added handleLogout function to handle user logout
@@ -490,6 +571,11 @@ const App: React.FC = () => {
     setPasswordAttempts(0);
     setPrivacyAccepted(false);
     setHasStoredPrivacyConsent(false);
+    setClientFidelizado(null);
+    setShowFidelizadoModal(false);
+    setShowDataTreatmentModal(false);
+    setShowNewClientRegisteredModal(false);
+    setIsSubmittingLoginFlow(false);
     resetGenericResetState();
     setCurrentPasswordChange('');
     setNewPasswordChange('');
@@ -587,33 +673,29 @@ const App: React.FC = () => {
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-950/90 via-slate-900/80 to-slate-800/80"></div>
-        <div className="absolute -top-24 -right-24 w-72 h-72 bg-red-500/20 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-orange-400/20 rounded-full blur-3xl"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700"></div>
+        <div className="absolute -top-16 -right-16 w-72 h-72 bg-red-600/20 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-20 -left-20 w-72 h-72 bg-amber-400/20 rounded-full blur-3xl"></div>
         
-        <div className="max-w-xl w-full bg-white/95 backdrop-blur rounded-[2.5rem] shadow-2xl overflow-hidden relative z-10 animate-in fade-in zoom-in duration-500 border border-white/30">
+        <div className="max-w-lg w-full bg-white/95 backdrop-blur rounded-[2rem] shadow-2xl overflow-hidden relative z-10 animate-in fade-in zoom-in duration-500 border border-white/40">
           <div className="p-8 sm:p-10">
-            <div className="flex flex-col items-center mb-8 text-center">
-              <div className="w-[260px] h-[260px] bg-white rounded-3xl flex items-center justify-center mb-5 shadow-2xl border border-slate-100 p-2 overflow-hidden mx-auto">
+            <div className="flex flex-col items-center mb-7 text-center">
+              <div className="w-[210px] h-[210px] bg-white rounded-3xl flex items-center justify-center mb-4 shadow-xl border border-slate-200 p-2 overflow-hidden mx-auto">
                 <img src="/LOGO%20GRUPO%20LINA.jpeg" alt="Logo Grupo Lina" className="w-full h-full object-contain scale-[1.4]" />
               </div>
-              <h2
-                className="mt-2 text-2xl sm:text-3xl font-black italic text-red-700 uppercase tracking-tight leading-tight [-webkit-text-stroke:1.5px_#000000] [text-shadow:0_1px_0_rgba(0,0,0,0.45)]"
-              >
-                Facturación Grupo Lina
-              </h2>
-              <div className="h-1 w-20 bg-red-600 rounded-full mt-4"></div>
+              <div className="mt-1 inline-flex flex-col items-center">
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-red-700 tracking-tight leading-tight">
+                  GRUPO LINA
+                </h2>
+                <div className="h-1 w-full bg-red-600 rounded-full mt-3"></div>
+                <p className="mt-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  Portal de consulta de documentos
+                </p>
+              </div>
             </div>
 
-            {error && (
-              <div className="mb-6 p-4 bg-rose-50 border-l-4 border-rose-500 text-rose-700 text-xs font-bold rounded-r-xl animate-bounce">
-                <i className="fas fa-exclamation-triangle mr-2"></i>
-                {error}
-              </div>
-            )}
-
             <form onSubmit={handleAuthSubmit} className="space-y-4">
-              <p className="text-[11px] text-slate-500 font-semibold text-center mb-1">
+              <p className="text-xs text-slate-600 font-semibold text-center mb-2">
                 Ingresa tu identificación para acceder a tus facturas y estado de cuenta.
               </p>
               <div className="relative">
@@ -630,16 +712,29 @@ const App: React.FC = () => {
                     setPasswordAttempts(0);
                     setPrivacyAccepted(false);
                     setHasStoredPrivacyConsent(false);
+                    setClientFidelizado(null);
+                    setShowFidelizadoModal(false);
+                    setShowDataTreatmentModal(false);
+                    setShowNewClientRegisteredModal(false);
+                    setIsSubmittingLoginFlow(false);
                     resetGenericResetState();
                   }}
                   maxLength={20}
                   placeholder="CÉDULA / RUC / PASAPORTE"
-                  className="w-full pl-14 pr-5 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-xl outline-none focus:border-red-500 transition-all text-slate-800 font-bold text-sm"
+                  className="w-full pl-14 pr-5 py-3.5 bg-white border-2 border-slate-200 rounded-xl outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100 transition-all text-slate-800 font-bold text-sm"
                 />
               </div>
 
               {isCedulaValidated && (
-                <div className="relative">
+                <div className="flex items-center gap-2 p-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-xs font-bold">
+                  <i className="fas fa-triangle-exclamation"></i>
+                  La contraseña es sus primeros 7 dígitos.
+                </div>
+              )}
+
+              {isCedulaValidated && (
+                <div className="space-y-3">
+                  <div className="relative">
                   <i className="fas fa-lock absolute left-5 top-1/2 -translate-y-1/2 text-slate-400"></i>
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -649,10 +744,11 @@ const App: React.FC = () => {
                       setPassword(e.target.value.replace(/\D/g, ''));
                       setIsPasswordValidated(false);
                       setPrivacyAccepted(false);
+                      setClientFidelizado(null);
                     }}
                     maxLength={7}
                     placeholder="CONTRASEÑA GENÉRICA (7 DÍGITOS)"
-                    className="w-full pl-14 pr-14 py-3.5 bg-slate-50 border-2 border-slate-100 rounded-xl outline-none focus:border-red-500 transition-all text-slate-800 font-bold text-sm"
+                    className="w-full pl-14 pr-14 py-3.5 bg-white border-2 border-slate-200 rounded-xl outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100 transition-all text-slate-800 font-bold text-sm"
                   />
                   <button
                     type="button"
@@ -663,17 +759,12 @@ const App: React.FC = () => {
                   >
                     <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                   </button>
-                  <p className="mt-3 text-[11px] font-semibold text-slate-500 text-center">
-                    La contraseña es sus primeros 7 dígitos.
-                  </p>
+                  </div>
                 </div>
               )}
 
               {isCedulaValidated && !isPasswordValidated && (
                 <div className="space-y-3">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                    Intentos de contraseña restantes: <span className="text-red-600">{remainingPasswordAttempts}</span>
-                  </p>
                   <button
                     type="button"
                     onClick={() => setShowGenericReset((prev) => !prev)}
@@ -690,7 +781,7 @@ const App: React.FC = () => {
                         onChange={(e) => setGenericPasswordInput(e.target.value.replace(/\D/g, ''))}
                         maxLength={7}
                         placeholder="Clave genérica"
-                        className="sm:col-span-2 w-full px-4 py-3 border-2 border-slate-100 rounded-xl outline-none focus:border-red-500 font-black text-sm tracking-widest"
+                        className="sm:col-span-2 w-full px-4 py-3 border-2 border-slate-200 rounded-xl outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100 font-black text-sm tracking-widest"
                       />
                       <button
                         type="button"
@@ -705,41 +796,70 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {isPasswordValidated && !hasStoredPrivacyConsent && (
-                <div className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all ${privacyAccepted ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-100'}`}>
-                  <input
-                    type="checkbox"
-                    id="privacy"
-                    checked={privacyAccepted}
-                    onChange={(e) => setPrivacyAccepted(e.target.checked)}
-                    className="mt-1 w-5 h-5 accent-red-600 cursor-pointer"
-                  />
-                  <label htmlFor="privacy" className="text-[10px] leading-relaxed text-slate-600 cursor-pointer font-bold uppercase tracking-tight">
-                    En cumplimiento de la Ley Orgánica de Protección de Datos Personales, el cliente autoriza de manera libre, específica, informada e inequívoca el tratamiento de sus datos personales proporcionados en los locales del grupo Lina, los cuales serán utilizados únicamente para fines comerciales, contables, tributarios, administrativos y de contacto relacionados con la relación contractual.<br />
-                    La información será tratada con confidencialidad y no será compartida con terceros, salvo obligación legal. El titular podrá ejercer sus derechos de acceso, rectificación, actualización, eliminación, oposición y portabilidad mediante solicitud escrita al correo: analista.desarrollo@grupolina.com
-                  </label>
-                </div>
-              )}
-
-              {isPasswordValidated && hasStoredPrivacyConsent && (
-                <div className="flex items-center justify-center p-3 rounded-xl border-2 border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-widest">
-                  <i className="fas fa-circle-check mr-2"></i>
-                  Fidelizado: SI
+              {isPasswordValidated && clientFidelizado !== null && (
+                <div className={`flex items-center justify-center p-3 rounded-xl border-2 text-[10px] font-black uppercase tracking-widest ${clientFidelizado ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+                  <i className={`fas ${clientFidelizado ? 'fa-circle-check' : 'fa-user-plus'} mr-2`}></i>
+                  {clientFidelizado ? 'Cliente fidelizado' : 'Cliente nuevo: requiere aceptación de datos'}
                 </div>
               )}
 
               <button
-                disabled={isLoading || (isPasswordValidated && !privacyAccepted) || (!isPasswordValidated && isCedulaValidated && remainingPasswordAttempts === 0)}
-                className="w-full bg-red-700 text-white py-4.5 rounded-2xl font-black text-sm hover:bg-red-800 shadow-2xl shadow-red-900/20 transition-all active:scale-[0.98] mt-4 uppercase tracking-[0.2em] disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={isLoading || isSubmittingLoginFlow || (!isPasswordValidated && isCedulaValidated && remainingPasswordAttempts === 0)}
+                className="w-full bg-red-700 text-white py-4 rounded-2xl font-black text-sm hover:bg-red-800 shadow-xl shadow-red-900/20 transition-all active:scale-[0.98] mt-4 uppercase tracking-[0.18em] disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isLoading
                   ? 'Validando...'
+                  : isSubmittingLoginFlow
+                    ? 'Procesando ingreso...'
                   : !isCedulaValidated
                     ? 'Validar Identificación'
                     : !isPasswordValidated
                       ? 'Validar Contraseña'
                       : 'Ingresar al Sistema'}
               </button>
+
+              {showFidelizadoModal && (
+                <div className="fixed inset-0 z-[120] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 shadow-2xl p-6 text-center">
+                    <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto mb-4">
+                      <i className="fas fa-check text-2xl"></i>
+                    </div>
+                    <p className="text-lg font-black text-slate-900">Cliente Fidelizado</p>
+                    <p className="text-xs font-semibold text-slate-500 mt-2">Ingresando al dashboard...</p>
+                    <div className="mt-4 w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full w-1/2 bg-emerald-500 rounded-full animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {showDataTreatmentModal && (
+                <div className="fixed inset-0 z-[120] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="w-full max-w-2xl bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
+                      <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Tratamiento de Datos Personales</h3>
+                    </div>
+                    <div className="p-6 max-h-[55vh] overflow-auto">
+                      <p className="text-xs leading-relaxed text-slate-600 font-semibold">
+                        En cumplimiento de la Ley Orgánica de Protección de Datos Personales, el cliente autoriza de manera libre, específica, informada e inequívoca el tratamiento de sus datos personales proporcionados en los locales del Grupo Lina, los cuales serán utilizados únicamente para fines comerciales, contables, tributarios, administrativos y de contacto relacionados con la relación contractual.
+                      </p>
+                      <p className="text-xs leading-relaxed text-slate-600 font-semibold mt-4">
+                        La información será tratada con confidencialidad y no será compartida con terceros, salvo obligación legal. El titular podrá ejercer sus derechos de acceso, rectificación, actualización, eliminación, oposición y portabilidad mediante solicitud escrita al correo: analista.desarrollo@grupolina.com
+                      </p>
+                    </div>
+                    <div className="px-6 py-4 border-t border-slate-100 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleAcceptDataTreatment}
+                        disabled={isLoading}
+                        className="px-6 py-3 bg-red-700 hover:bg-red-800 text-white rounded-xl font-black text-xs uppercase tracking-widest disabled:opacity-60"
+                      >
+                        {isLoading ? 'Guardando...' : 'Aceptar'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </form>
           </div>
         </div>
@@ -999,17 +1119,38 @@ const App: React.FC = () => {
 
   return (
     <Router>
-      <Layout 
-        user={user} 
-        onLogout={handleLogout} 
-        activeTab={activeTab} 
-        setActiveTab={(tab) => {
-          setActiveTab(tab);
-          setSelectedInvoiceId(null);
-        }}
-      >
-        {renderContent()}
-      </Layout>
+      <>
+        <Layout 
+          user={user} 
+          onLogout={handleLogout} 
+          activeTab={activeTab} 
+          setActiveTab={(tab) => {
+            setActiveTab(tab);
+            setSelectedInvoiceId(null);
+          }}
+        >
+          {renderContent()}
+        </Layout>
+
+        {user && showNewClientRegisteredModal && (
+          <div className="fixed inset-0 z-[130] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-2xl p-6 text-center">
+              <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto mb-4">
+                <i className="fas fa-circle-check text-2xl"></i>
+              </div>
+              <h3 className="text-lg font-black text-slate-900">Cliente registrado correctamente</h3>
+              <p className="text-xs text-slate-600 font-semibold mt-2">La aceptación de tratamiento de datos fue guardada y el acceso está habilitado.</p>
+              <button
+                type="button"
+                onClick={() => setShowNewClientRegisteredModal(false)}
+                className="mt-5 px-6 py-3 bg-red-700 hover:bg-red-800 text-white rounded-xl font-black text-xs uppercase tracking-widest"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        )}
+      </>
     </Router>
   );
 };

@@ -76,8 +76,8 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, activeTab, se
             <div className="text-right hidden sm:block">
               {/* FIX: Using user.fullName instead of non-existent user.name */}
               <p className="text-sm font-bold text-slate-900 leading-none">{user.fullName}</p>
-              <p className={`text-[10px] font-black mt-1 uppercase tracking-tighter inline-flex items-center px-2 py-1 rounded-full ${user.privacyAccepted ? 'text-emerald-700 bg-emerald-100' : 'text-slate-600 bg-slate-200'}`}>
-                {user.privacyAccepted ? 'Fidelizado: SI' : 'Fidelizado: NO'}
+              <p className={`text-[10px] font-black mt-1 uppercase tracking-tighter inline-flex items-center px-2 py-1 rounded-full ${user.fidelizado ? 'text-emerald-700 bg-emerald-100' : 'text-slate-600 bg-slate-200'}`}>
+                {user.fidelizado ? 'Fidelizado: SI' : 'Fidelizado: NO'}
               </p>
             </div>
             <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-700 font-bold border-2 border-white shadow-sm">
